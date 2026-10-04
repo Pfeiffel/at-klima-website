@@ -1,0 +1,54 @@
+/* Zusätzliche Feinheiten über das Bootstrap-Theme hinaus */
+
+.lead-text {
+  font-size: 1.15rem;
+  line-height: 1.6;
+  color: #52514e;
+  max-width: 42em;
+  margin-bottom: 2.5rem;
+}
+
+/* Grafiken bekommen Luft und einen dezenten Rahmen */
+.quarto-figure {
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}
+
+figure.figure img, .figure-img {
+  border-radius: 6px;
+}
+
+/* Bildunterschriften zurückhaltender */
+figcaption, .figure-caption {
+  font-size: 0.85rem !important;
+  color: #898781 !important;
+  margin-top: 0.6rem !important;
+}
+
+/* Themenkacheln auf der Startseite */
+.grid h3 {
+  margin-top: 0;
+  font-size: 1.2rem;
+}
+
+.grid h3 a {
+  text-decoration: none;
+}
+
+.grid > div {
+  padding: 1.4rem 1.6rem;
+  border: 1px solid #e1e0d9;
+  border-radius: 10px;
+  background: #ffffff;
+  margin-bottom: 0.4rem;
+}
+
+/* Code-Block beim Aufklappen etwas kleiner */
+details.code-fold pre {
+  font-size: 0.82rem;
+}
+
+/* Tabellen schlicht halten */
+table {
+  font-size: 0.92rem;
+}
