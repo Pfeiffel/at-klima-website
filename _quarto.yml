@@ -1,0 +1,60 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "Österreich im Klimawandel"
+  description: "Was 270 Jahre Messreihen und 125 Jahre Tagesdaten zeigen"
+  site-url: "https://DEIN-NAME.github.io/at-klima-website"
+  favicon: ""
+
+  navbar:
+    background: light
+    search: true
+    left:
+      - href: index.qmd
+        text: Start
+      - href: klima.qmd
+        text: 270 Jahre
+      - href: extreme.qmd
+        text: Hitze und Frost
+    right:
+      - href: ueber.qmd
+        text: Über
+
+  page-footer:
+    background: light
+    left: "Daten: GeoSphere Austria · CC BY 4.0"
+    right: "Gebaut mit [Quarto](https://quarto.org)"
+
+format:
+  html:
+    theme: [cosmo, styles.scss]
+    css: styles.css
+    toc: true
+    toc-title: "Auf dieser Seite"
+    toc-depth: 2
+    code-fold: true
+    code-summary: "R-Code anzeigen"
+    code-tools: false
+    fig-width: 9
+    fig-height: 6
+    fig-dpi: 160
+    fig-format: png
+    page-layout: article
+    smooth-scroll: true
+
+execute:
+  # WICHTIG: friert die Ergebnisse ein. Ohne das würden bei jedem
+  # Rendern alle Datensätze neu heruntergeladen - und der
+  # GitHub-Workflow bräuchte eine komplette R-Installation.
+  freeze: auto
+  warning: false
+  message: false
+  echo: true
+
+knitr:
+  opts_chunk:
+    dev: "png"
+    dev.args:
+      bg: "#fcfcfb"

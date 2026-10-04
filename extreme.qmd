@@ -1,0 +1,336 @@
+---
+title: "Hitze und Frost"
+subtitle: "Was Tagesdaten zeigen, das Jahresmittel verschweigen"
+---
+
+```{r}
+#| include: false
+source("R/setup.R")
+```
+
+Die [vorige Seite](klima.qmd) arbeitet mit Jahresmitteln. Für den langen Trend
+ist das die richtige Größe, aber Jahresmittel sind abstrakt — „plus zwei Grad"
+kann sich niemand vorstellen.
+
+**Tagesdaten** können etwas anderes: Sie zählen Ereignisse. Hitzetage,
+Tropennächte, Frostnächte. Das sind Zahlen, die man spürt.
+
+Die Messreihe stammt wieder von GeoSphere Austria, diesmal aus dem Datensatz
+`klima-v2-1d`. Er liefert für jeden einzelnen Tag das Temperaturmaximum und
+-minimum — für Wien-Hohe Warte zurück bis an den Anfang des 20. Jahrhunderts.
+
+```{r}
+#| label: daten-laden
+
+WIEN <- 105   # Achtung: in HISTALP hat dieselbe Station die Nummer 152
+
+tage <- klima_tag(WIEN, c("tlmax", "tlmin")) |>
+  rename_with(tolower) |>
+  mutate(
+    datum       = as.Date(substr(as.character(time), 1, 10)),
+    jahr        = as.integer(format(datum, "%Y")),
+    monat       = as.integer(format(datum, "%m")),
+    tag_im_jahr = as.integer(format(datum, "%j"))
+  ) |>
+  filter(!is.na(datum)) |>
+  select(datum, jahr, monat, tag_im_jahr, tmax = tlmax, tmin = tlmin)
+
+# Nur Jahre mit halbwegs vollständiger Messreihe behalten - sonst
+# zählen Lückenjahre zu wenige Hitzetage und täuschen einen Trend vor,
+# der nur aus fehlenden Messungen besteht.
+vollstaendig <- tage |>
+  summarise(n = sum(!is.na(tmax)), .by = jahr) |>
+  filter(n >= 350) |>
+  pull(jahr)
+
+tage <- tage |> filter(jahr %in% vollstaendig)
+
+ZEITRAUM <- paste0(min(tage$jahr), " bis ", max(tage$jahr))
+```
+
+Ausgewertet werden `r format(nrow(tage), big.mark = ".")` Tageswerte aus den
+Jahren `r ZEITRAUM`.
+
+## Drei Zahlen, die man spürt
+
+Die Meteorologie hat dafür feste Schwellen:
+
+| Kennzahl | Bedingung |
+|---|---|
+| **Sommertag** | Tagesmaximum erreicht 25 °C |
+| **Hitzetag** | Tagesmaximum erreicht 30 °C |
+| **Tropennacht** | Das Minimum fällt nachts nicht unter 20 °C |
+
+Die Tropennächte sind dabei das Eindrucksvollste — und das gesundheitlich
+Relevante. Wenn es nachts nicht abkühlt, erholt sich der Kreislauf nicht.
+
+```{r}
+#| label: fig-hitzetage
+#| fig-cap: "Anzahl der Tage pro Jahr, die die jeweilige Schwelle erreichen. Die Linie ist eine Glättung über rund zehn Jahre."
+#| fig-height: 8
+
+kennzahlen <- tage |>
+  summarise(
+    Sommertage   = sum(tmax >= 25, na.rm = TRUE),
+    Hitzetage    = sum(tmax >= 30, na.rm = TRUE),
+    Tropennächte = sum(tmin >= 20, na.rm = TRUE),
+    .by = jahr
+  ) |>
+  pivot_longer(-jahr, names_to = "kennzahl", values_to = "anzahl") |>
+  mutate(kennzahl = factor(kennzahl,
+                           levels = c("Sommertage", "Hitzetage", "Tropennächte")))
+
+ggplot(kennzahlen, aes(jahr, anzahl, fill = kennzahl)) +
+  geom_col(width = 1) +
+  geom_smooth(aes(color = kennzahl), se = FALSE, method = "loess",
+              span = 0.4, linewidth = 1.2, show.legend = FALSE) +
+  facet_wrap(~kennzahl, ncol = 1, scales = "free_y") +
+  scale_fill_manual(values = c(MILD, WARM, HEISS), guide = "none") +
+  scale_color_manual(values = c("#1c5cab", "#a33", "#400"), guide = "none") +
+  labs(x = NULL, y = "Tage pro Jahr", caption = QUELLE_TAG) +
+  theme_at()
+```
+
+```{r}
+#| label: tab-hitzetage
+
+kennzahlen |>
+  mutate(periode = case_when(
+    jahr <= min(jahr) + 29 ~ "erste 30 Jahre",
+    jahr >= max(jahr) - 29 ~ "letzte 30 Jahre")) |>
+  filter(!is.na(periode)) |>
+  summarise(wert = round(mean(anzahl), 1), .by = c(kennzahl, periode)) |>
+  pivot_wider(names_from = periode, values_from = wert) |>
+  rename(Kennzahl = kennzahl) |>
+  knitr::kable(caption = "Durchschnittliche Anzahl pro Jahr, Anfang und Ende der Messreihe.")
+```
+
+## Das frostfreie Jahr wird länger
+
+Für jedes Jahr lässt sich bestimmen, wann der letzte Frost im Frühjahr fiel und
+wann der erste im Herbst kam. Dazwischen liegt die frostfreie Zeit — in der
+Landwirtschaft die Vegetationsperiode.
+
+Als Band gezeichnet sieht man, wie sich beide Ränder auseinanderbewegen.
+
+```{r}
+#| label: fig-frost
+#| fig-cap: "Letzter Frost im Frühjahr und erster Frost im Herbst. Die grüne Fläche ist die frostfreie Zeit."
+#| fig-height: 6
+
+frost <- tage |>
+  filter(!is.na(tmin)) |>
+  mutate(ist_frost = tmin < 0) |>
+  summarise(
+    letzter_fruehling = suppressWarnings(
+      max(tag_im_jahr[ist_frost & tag_im_jahr < 182], na.rm = TRUE)),
+    erster_herbst = suppressWarnings(
+      min(tag_im_jahr[ist_frost & tag_im_jahr >= 182], na.rm = TRUE)),
+    .by = jahr
+  ) |>
+  filter(is.finite(letzter_fruehling), is.finite(erster_herbst)) |>
+  mutate(frostfrei = erster_herbst - letzter_fruehling)
+
+ggplot(frost, aes(x = jahr)) +
+  geom_ribbon(aes(ymin = letzter_fruehling, ymax = erster_herbst),
+              fill = GRUEN, alpha = 0.18) +
+  geom_line(aes(y = letzter_fruehling), color = KALT,
+            alpha = 0.35, linewidth = 0.4) +
+  geom_line(aes(y = erster_herbst), color = KALT,
+            alpha = 0.35, linewidth = 0.4) +
+  geom_smooth(aes(y = letzter_fruehling), se = FALSE, method = "loess",
+              span = 0.5, color = KALT, linewidth = 1.8) +
+  geom_smooth(aes(y = erster_herbst), se = FALSE, method = "loess",
+              span = 0.5, color = KALT, linewidth = 1.8) +
+  scale_y_continuous(breaks = c(32, 60, 91, 121, 244, 274, 305, 335),
+                     labels = tag_label) +
+  labs(x = NULL, y = NULL, caption = QUELLE_TAG) +
+  theme_at()
+```
+
+```{r}
+#| label: tab-frost
+
+frost |>
+  mutate(periode = case_when(
+    jahr <= min(jahr) + 29 ~ "erste 30 Jahre",
+    jahr >= max(jahr) - 29 ~ "letzte 30 Jahre")) |>
+  filter(!is.na(periode)) |>
+  summarise(
+    `Letzter Frost im Frühjahr` = tag_label(round(mean(letzter_fruehling))),
+    `Erster Frost im Herbst`    = tag_label(round(mean(erster_herbst))),
+    `Frostfreie Tage`           = round(mean(frostfrei)),
+    .by = periode) |>
+  rename(Zeitraum = periode) |>
+  knitr::kable(caption = "Im Mittel über je 30 Jahre.")
+```
+
+## Nicht jeder Monat erwärmt sich gleich
+
+Die Erwärmung verteilt sich nicht gleichmäßig über das Jahr — eine der weniger
+bekannten Eigenheiten des Klimawandels. Für jeden Kalendermonat ist hier die
+Steigung einer linearen Regression berechnet: um wie viel Grad pro Jahrzehnt
+dieser Monat wärmer geworden ist.
+
+Als Kreis dargestellt, weil das Jahr ein Kreis ist.
+
+```{r}
+#| label: fig-monate
+#| fig-cap: "Temperaturanstieg je Jahrzehnt, nach Kalendermonat."
+#| fig-height: 7.5
+#| fig-width: 7.5
+
+monats_trend <- tage |>
+  mutate(tmittel = (tmax + tmin) / 2) |>
+  summarise(temp = mean(tmittel, na.rm = TRUE), .by = c(jahr, monat)) |>
+  filter(!is.na(temp)) |>
+  nest(.by = monat) |>
+  mutate(trend = map_dbl(data, \(d) coef(lm(temp ~ jahr, d))[2] * 10)) |>
+  select(monat, trend) |>
+  arrange(monat)
+
+ggplot(monats_trend, aes(factor(monat), trend, fill = trend)) +
+  geom_col(width = 0.9) +
+  geom_text(aes(label = paste0("+", format(round(trend, 2), decimal.mark = ","))),
+            vjust = -0.6, size = 3, color = INK_2) +
+  coord_polar(start = -pi / 12) +
+  scale_x_discrete(labels = MONATE) +
+  scale_fill_gradient(low = MILD, high = HEISS, guide = "none") +
+  labs(x = NULL, y = NULL,
+       caption = paste0(QUELLE_TAG, " · Steigung einer linearen Regression")) +
+  theme_at() +
+  theme(axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 11, face = "bold", color = INK_2))
+```
+
+## Die Jahreskurve ist verrutscht
+
+Legt man den mittleren Temperaturverlauf der ersten dreißig Jahre über den der
+letzten dreißig, sieht man nicht nur, dass die Kurve höher liegt. Sie ist auch
+seitlich verschoben: Eine bestimmte Frühlingstemperatur wird heute **früher im
+Jahr** erreicht als damals.
+
+```{r}
+#| label: fig-jahreskurve
+#| fig-cap: "Mittlerer Temperaturverlauf über das Jahr, je 30 Jahre gemittelt und über 15 Tage geglättet."
+#| fig-height: 6
+
+jahre_alle <- sort(unique(tage$jahr))
+frueh <- jahre_alle[1:30]
+heute <- tail(jahre_alle, 30)
+
+verlauf <- tage |>
+  mutate(tmittel = (tmax + tmin) / 2,
+         epoche = case_when(jahr %in% frueh ~ "früher",
+                            jahr %in% heute ~ "heute")) |>
+  filter(!is.na(epoche), !is.na(tmittel)) |>
+  summarise(temp = mean(tmittel), .by = c(epoche, tag_im_jahr)) |>
+  arrange(epoche, tag_im_jahr) |>
+  mutate(temp = as.numeric(stats::filter(temp, rep(1 / 15, 15), sides = 2)),
+         .by = epoche) |>
+  filter(!is.na(temp))
+
+ggplot(verlauf, aes(tag_im_jahr, temp, color = epoche)) +
+  geom_line(linewidth = 1.8) +
+  scale_color_manual(
+    values = c("früher" = KALT, "heute" = HEISS),
+    labels = c(paste0("früher (", min(frueh), "–", max(frueh), ")"),
+               paste0("heute (", min(heute), "–", max(heute), ")")),
+    name = NULL) +
+  scale_x_continuous(breaks = MONATSACHSE$breaks, labels = MONATSACHSE$labels) +
+  scale_y_continuous(labels = \(x) paste0(x, " °C")) +
+  labs(x = NULL, y = NULL, caption = QUELLE_TAG) +
+  theme_at()
+```
+
+Wie groß ist diese seitliche Verschiebung? Für jeden Frühlingstag lässt sich
+fragen: An welchem Tag hatte es **früher** jene Temperatur, die **heute** an
+diesem Tag herrscht?
+
+```{r}
+#| label: tab-verschiebung
+
+fruehjahr <- verlauf |>
+  pivot_wider(names_from = epoche, values_from = temp) |>
+  # Umlaut-Spaltennamen vermeiden, die machen beim Rechnen nur Ärger
+  rename(temp_frueher = `früher`, temp_heute = `heute`) |>
+  filter(between(tag_im_jahr, 60, 180),
+         !is.na(temp_frueher), !is.na(temp_heute))
+
+tag_gleicher_temp <- function(zieltemp) {
+  fruehjahr$tag_im_jahr[which.min(abs(fruehjahr$temp_frueher - zieltemp))]
+}
+
+verschiebung <- fruehjahr |>
+  mutate(tag_frueher  = map_dbl(temp_heute, tag_gleicher_temp),
+         tage_frueher = tag_frueher - tag_im_jahr) |>
+  # Randtage aussortieren: Liegt die heutige Temperatur außerhalb dessen,
+  # was früher im Fenster vorkam, landet which.min am Rand und der Wert
+  # ist keine echte Entsprechung.
+  filter(tag_frueher > min(tag_im_jahr), tag_frueher < max(tag_im_jahr))
+
+tibble(
+  `Zeitraum Frühjahr` = "März bis Juni",
+  `Dieselbe Temperatur wird heute erreicht` =
+    paste0(round(mean(verschiebung$tage_frueher)), " Tage früher"),
+  `verglichen mit` = paste0(min(frueh), "–", max(frueh))
+) |> knitr::kable()
+```
+
+## Wann die Tagesrekorde fielen
+
+In einem stabilen Klima werden Rekorde mit der Zeit seltener — schlicht, weil
+es schwerer wird, einen alten Bestwert zu übertreffen, je länger die Messreihe
+ist. Nach `r length(unique(tage$jahr))` Jahren sollte ein neuer Tagesrekord die
+Ausnahme sein.
+
+Die Grafik zeigt für jeden Kalendertag, in welchem Jahr der bis heute gültige
+Höchstwert gemessen wurde. Wenn sich die Punkte im oberen Bereich ballen, ist
+das ein Signal.
+
+```{r}
+#| label: fig-rekorde
+#| fig-cap: "Für jeden Kalendertag das Jahr, in dem der bis heute gültige Höchstwert fiel."
+#| fig-height: 6
+
+rekorde <- tage |>
+  filter(!is.na(tmax)) |>
+  slice_max(tmax, n = 1, by = tag_im_jahr, with_ties = FALSE) |>
+  select(tag_im_jahr, rekord_jahr = jahr, rekord_temp = tmax)
+
+ggplot(rekorde, aes(tag_im_jahr, rekord_jahr, color = rekord_temp)) +
+  geom_point(size = 2, alpha = 0.85) +
+  scale_color_gradient(low = MILD, high = HEISS, name = "Rekordwert",
+                       labels = \(x) paste0(x, " °C")) +
+  scale_x_continuous(breaks = MONATSACHSE$breaks, labels = MONATSACHSE$labels) +
+  labs(x = NULL, y = NULL, caption = QUELLE_TAG) +
+  theme_at()
+```
+
+```{r}
+#| label: tab-rekorde
+
+n_jahre <- diff(range(tage$jahr)) + 1
+grenze  <- max(tage$jahr) - 24
+
+tibble(
+  `Länge der Messreihe`       = paste0(n_jahre, " Jahre"),
+  `Anteil der letzten 25 Jahre` = paste0(round(25 / n_jahre * 100), " %"),
+  `davon stammende Tagesrekorde` =
+    paste0(round(mean(rekorde$rekord_jahr >= grenze) * 100), " %")
+) |> knitr::kable()
+```
+
+::: {.callout-note}
+## Warum eine einzelne Station?
+
+Alle Auswertungen hier stammen von Wien-Hohe Warte. Das ist Absicht: Schwellen
+wie „30 Grad" lassen sich nicht über Stationen mitteln, ohne dass die Zahl ihre
+Bedeutung verliert — der Sonnblick auf 3.109 Metern hat schlicht keine
+Hitzetage.
+
+Wer eine andere Station sehen will, ändert in `extreme.qmd` die Zeile
+`WIEN <- 105`. Die Alternativen stehen in `R/setup.R` unter `KLIMA_STATIONEN`.
+Der Sonnblick ist als Kontrast interessant: Dort gibt es keine Hitzetage,
+dafür ist der Rückgang der Frostnächte umso deutlicher.
+:::

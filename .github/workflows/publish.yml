@@ -1,0 +1,53 @@
+name: Website veröffentlichen
+
+# Läuft bei jedem Push auf main - und lässt sich über den
+# Actions-Tab auch von Hand starten.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository holen
+        uses: actions/checkout@v4
+
+      - name: Quarto einrichten
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      # WICHTIG: Hier wird KEIN R installiert.
+      #
+      # Durch "freeze: auto" in _quarto.yml liegen die berechneten
+      # Ergebnisse im Ordner _freeze/, der mitcommittet wird. Quarto
+      # setzt daraus die Seiten zusammen, ohne den R-Code erneut
+      # auszuführen. Das macht den Lauf schnell (unter einer Minute
+      # statt zwanzig) und unabhängig davon, ob die Datenquellen
+      # gerade erreichbar sind.
+      #
+      # Der Ablauf ist deshalb: lokal rendern -> _freeze/ mitcommitten
+      # -> pushen. Siehe README.
+      - name: Rendern
+        run: quarto render
+
+      - name: Für GitHub Pages vorbereiten
+        uses: actions/configure-pages@v5
+
+      - name: Hochladen
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Veröffentlichen
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,80 @@
+---
+title: "Über dieses Projekt"
+toc: true
+---
+
+## Woher die Daten kommen
+
+Alles auf dieser Seite stammt aus der offenen Schnittstelle des
+**GeoSphere Austria Data Hub**. Kein Zugangsschlüssel, keine Anmeldung, keine
+Datei liegt in diesem Repository — jeder Wert wird beim Rendern frisch
+abgerufen.
+
+| Datensatz | Was drinsteht | Verwendet auf |
+|---|---|---|
+| `histalp-v1-1y` | Jahreswerte Temperatur und Niederschlag, homogenisiert, teils ab 1760 | [270 Jahre](klima.qmd) |
+| `klima-v2-1d` | Tageswerte Maximum und Minimum der Lufttemperatur | [Hitze und Frost](extreme.qmd) |
+
+Einstiegspunkt der API:
+<https://dataset.api.hub.geosphere.at/v1/datasets>
+
+Lizenz: **CC BY 4.0**. Weiterverwendung ist erlaubt, die Quelle muss genannt
+werden — deshalb steht sie unter jeder Grafik.
+
+## Was homogenisiert bedeutet
+
+Eine Messreihe über zweihundert Jahre ist nie an einem Ort mit einem Gerät
+entstanden. Stationen ziehen um, Thermometer werden getauscht, Messzeiten
+ändern sich, Städte wachsen um die Station herum. Jeder dieser Eingriffe
+erzeugt einen Sprung in den Daten, der nichts mit dem Klima zu tun hat.
+
+HISTALP rechnet solche Sprünge heraus, indem Nachbarstationen als Kontrolle
+dienen: Ein Sprung, den nur eine Station zeigt, ist technisch; einer, den alle
+zeigen, ist real. Deshalb ist HISTALP für lange Vergleiche die richtige Wahl —
+und deshalb sind seine Werte nicht identisch mit den rohen Messungen.
+
+Der Tagesdatensatz `klima-v2-1d` ist *nicht* homogenisiert. Für Auswertungen
+über 30 bis 100 Jahre an einer gut dokumentierten Station ist das vertretbar,
+für den Vergleich 1780 gegen 2020 wäre es das nicht.
+
+## Methodische Entscheidungen
+
+**Referenzperiode 1961–1990.** Die WMO-Standardperiode. Sie ist nicht
+„natürlich", sondern eine Konvention — Abweichungen sind immer Abweichungen
+*von etwas*, und diese Wahl macht die Grafiken mit anderen Darstellungen
+vergleichbar.
+
+**Nur vollständige Jahre.** Auf der Seite zu Hitze und Frost werden Jahre mit
+weniger als 350 Messtagen verworfen. Sonst zählt ein Jahr mit Messlücke zu
+wenige Hitzetage und täuscht einen Trend vor, der nur aus fehlenden Werten
+besteht.
+
+**Eine Station, nicht ein Durchschnitt.** Schwellenwerte wie „30 Grad" lassen
+sich nicht über Stationen mitteln, ohne dass die Zahl ihre Bedeutung verliert.
+Ein Mittel aus Wien und Sonnblick beschreibt keinen Ort.
+
+**Keine Doppelachsen.** Wenn zwei Größen mit verschiedenen Einheiten
+verglichen werden, stehen sie untereinander oder sind auf dieselbe Basis
+indexiert. Zwei Achsen in einem Feld lassen jeden gewünschten Zusammenhang
+entstehen, je nachdem wie man skaliert.
+
+## Was hier bewusst nicht steht
+
+Diese Seite zeigt **gemessene Vergangenheit**. Keine Projektionen, keine
+Szenarien, keine Zuordnung einzelner Ereignisse zum Klimawandel. Das sind
+eigene Forschungsfelder mit eigenen Methoden, und sie lassen sich nicht aus
+einer Messreihe allein herleiten.
+
+Ebenso wenig behauptet die Seite, dass alle Wetterextreme zunehmen. Beim
+Jahresniederschlag in Wien zeigt sich kein Trend, und das steht auch so dort.
+
+## Technik
+
+Gebaut mit [Quarto](https://quarto.org) und R. Die Grafiken entstehen mit
+`ggplot2`, der Datenabruf läuft über `httr`.
+
+Farben, Theme und Datenzugriff liegen zentral in `R/setup.R` — wer das
+Aussehen ändern will, ändert nur diese Datei, und alle Grafiken ziehen nach.
+
+Der Quellcode jeder Grafik ist über *R-Code anzeigen* direkt auf der jeweiligen
+Seite einsehbar.

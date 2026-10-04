@@ -1,0 +1,16 @@
+{
+  "hash": "c4e56fe49e7209e496d45d97f238c451",
+  "result": {
+    "markdown": "---\ntitle: \"Österreich im Klimawandel\"\nsubtitle: \"Zwei Blickwinkel auf dieselbe Frage\"\ntoc: false\npage-layout: full\n---\n\n\n\n\n::: {.lead-text}\nAlle Auswertungen auf dieser Seite beruhen auf frei zugänglichen Messreihen von\nGeoSphere Austria. Nichts davon ist modelliert oder hochgerechnet — es sind\ngemessene Temperaturen. Der Code ist auf jeder Seite sichtbar, einfach auf\n*R-Code anzeigen* klicken.\n:::\n\n\n::: {.cell .hero-figure}\n\n```{.r .cell-code}\nwien <- histalp_holen(152, \"T01\") |>\n  rename_with(tolower) |>\n  mutate(jahr = as.integer(substr(as.character(time), 1, 4))) |>\n  filter(!is.na(t01), !is.na(jahr))\n\nbasis <- mean(wien$t01[between(wien$jahr, 1961, 1990)], na.rm = TRUE)\nwien  <- wien |> mutate(abw = t01 - basis)\ng     <- max(abs(wien$abw), na.rm = TRUE)\n\nggplot(wien, aes(jahr, 1, fill = abw)) +\n  geom_tile(width = 1, height = 1) +\n  scale_fill_gradientn(colours = STRIPES, limits = c(-g, g), guide = \"none\") +\n  scale_x_continuous(expand = c(0, 0), breaks = seq(1780, 2020, 40)) +\n  scale_y_continuous(expand = c(0, 0)) +\n  theme_void(base_family = \"sans\") +\n  theme(axis.text.x = element_text(size = 10, color = INK_MUT,\n                                   margin = margin(t = 6)),\n        plot.background = element_rect(fill = SURFACE, color = NA))\n```\n\n::: {.cell-output-display}\n![Jahresmitteltemperatur Wien-Hohe Warte, 1775 bis 2021. Jeder Streifen ein Jahr, eingefärbt nach der Abweichung vom Mittel 1961–1990.](index_files/figure-html/fig-hero-1.png){#fig-hero}\n:::\n:::\n\n\n## Die zwei Seiten\n\n::: {.grid}\n\n::: {.g-col-12 .g-col-md-6}\n### [270 Jahre](klima.qmd)\nDie längsten Messreihen Österreichs, aus HISTALP. Warming Stripes für sechs\nStationen vom Flachland bis auf 3.100 Meter, die Verschiebung der\nTemperaturverteilung — und die Frage, ob sich auch der Niederschlag verändert\nhat. Antwort: nicht erkennbar.\n:::\n\n::: {.g-col-12 .g-col-md-6}\n### [Hitze und Frost](extreme.qmd)\nDieselbe Entwicklung in Tagesdaten statt Jahresmitteln. Hitzetage und\nTropennächte, das länger werdende frostfreie Jahr, der Monat mit der stärksten\nErwärmung und die Frage, aus welchen Jahren die Tagesrekorde stammen.\n:::\n\n:::\n\n## Warum zwei Datensätze?\n\nSie beantworten verschiedene Fragen, und keiner kann beides.\n\n**HISTALP** ist *homogenisiert*: Stationsverlegungen, Gerätewechsel und\ngeänderte Messzeiten sind herausgerechnet. Nur deshalb darf man einen Wert von\n1780 überhaupt mit einem von 2020 vergleichen. Dieser Datensatz liefert\nallerdings nur Jahres- und Monatswerte.\n\n**klima-v2-1d** liefert jeden einzelnen Messtag, reicht dafür weniger weit\nzurück und ist nicht homogenisiert. Für Schwellenwerte wie „30 Grad\" braucht\nman aber genau das: den einzelnen Tag.\n\nDie lange Reihe zeigt also *dass* es wärmer wird, die Tagesreihe zeigt, *was\ndas im Alltag bedeutet*.\n",
+    "supporting": [
+      "index_files"
+    ],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

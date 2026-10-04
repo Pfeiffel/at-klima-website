@@ -1,0 +1,189 @@
+---
+title: "270 Jahre Klima"
+subtitle: "Was die längsten Messreihen Österreichs zeigen"
+---
+
+```{r}
+#| include: false
+source("R/setup.R")
+library(httr)
+```
+
+Die Station Wien-Hohe Warte misst seit dem 18. Jahrhundert. Das ist
+ungewöhnlich — die meisten Klimagrafiken beginnen 1850 oder später, weil
+vorher schlicht niemand gemessen hat. Die Daten stammen aus HISTALP, einer
+homogenisierten Sammlung von Messreihen für den Alpenraum, die GeoSphere
+Austria über eine offene Schnittstelle bereitstellt.
+
+```{r}
+#| label: daten-laden
+
+referenz <- c(1961, 1990)   # WMO-Standardperiode
+
+roh <- histalp_holen(HISTALP_STATIONEN$station_id, c("T01", "R01"))
+
+klima <- roh |>
+  rename_with(tolower) |>
+  mutate(jahr = as.integer(substr(as.character(time), 1, 4)),
+         station_id = as.integer(station)) |>
+  # Rohspalte entfernen, sonst kollidiert sie beim Join mit dem Klarnamen
+  select(-station) |>
+  left_join(HISTALP_STATIONEN, by = "station_id") |>
+  select(jahr, station, hoehe, temperatur = t01, niederschlag = r01) |>
+  filter(!is.na(jahr)) |>
+  group_by(station) |>
+  mutate(basis = mean(temperatur[between(jahr, referenz[1], referenz[2])],
+                      na.rm = TRUE),
+         abweichung = temperatur - basis) |>
+  ungroup()
+
+wien <- klima |> filter(station == "Wien-Hohe Warte", !is.na(temperatur))
+```
+
+## Zweieinhalb Jahrhunderte in Farbe
+
+Ein Streifen pro Jahr, eingefärbt nach der Abweichung vom langjährigen
+Mittel. Keine Achsen, keine Zahlen — die Form hat Ed Hawkins bekannt
+gemacht, weil sie ohne jede Erklärung funktioniert.
+
+```{r}
+#| label: fig-stripes
+#| fig-cap: "Jahresmitteltemperatur Wien-Hohe Warte. Blau = kühler als 1961–1990, rot = wärmer."
+#| fig-height: 3.6
+
+g <- max(abs(wien$abweichung), na.rm = TRUE)
+
+ggplot(wien, aes(jahr, 1, fill = abweichung)) +
+  geom_tile(width = 1, height = 1) +
+  scale_fill_gradientn(colours = STRIPES, limits = c(-g, g), guide = "none") +
+  scale_x_continuous(expand = c(0, 0), breaks = seq(1780, 2020, 40)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_void(base_family = "sans") +
+  theme(axis.text.x = element_text(size = 10, color = INK_MUT,
+                                   margin = margin(t = 6)),
+        plot.background = element_rect(fill = SURFACE, color = NA))
+```
+
+## Liegt es an der Stadt?
+
+Der naheliegende Einwand: Wien ist gewachsen, Beton speichert Wärme, die
+Messstation steht heute in einer anderen Umgebung als vor 200 Jahren. Das
+ist ein echter Effekt und heißt städtische Wärmeinsel.
+
+Deshalb lohnt der Blick auf sechs Stationen gleichzeitig — darunter der
+Sonnblick auf 3.105 Metern, mitten im Gletschergebiet, weit weg von jeder
+Siedlung.
+
+```{r}
+#| label: fig-alle-stationen
+#| fig-cap: "Sechs Stationen von 209 bis 3.105 Metern, nach Seehöhe sortiert."
+#| fig-height: 7
+
+alle <- klima |>
+  filter(!is.na(abweichung)) |>
+  mutate(station = fct_reorder(station, hoehe))
+
+g2 <- max(abs(alle$abweichung), na.rm = TRUE)
+
+ggplot(alle, aes(jahr, 1, fill = abweichung)) +
+  geom_tile(width = 1, height = 1) +
+  facet_wrap(~station, ncol = 1, strip.position = "left") +
+  scale_fill_gradientn(colours = STRIPES, limits = c(-g2, g2),
+                       name = "Abweichung in °C") +
+  scale_x_continuous(expand = c(0, 0), breaks = seq(1780, 2020, 40)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_void(base_family = "sans") +
+  theme(
+    strip.text.y.left = element_text(angle = 0, hjust = 1, size = 10,
+                                     face = "bold", color = INK_2,
+                                     margin = margin(r = 10)),
+    axis.text.x      = element_text(size = 9, color = INK_MUT,
+                                    margin = margin(t = 6)),
+    legend.position  = "bottom",
+    legend.key.width = unit(2.2, "cm"),
+    legend.key.height = unit(0.35, "cm"),
+    plot.background  = element_rect(fill = SURFACE, color = NA))
+```
+
+Der Sonnblick zeigt dasselbe Muster wie Wien. Die Erwärmung ist also kein
+Großstadteffekt.
+
+## Was früher ein Rekord war
+
+Statt der Zeitreihe die Verteilung: Wie häufig war welche Jahrestemperatur
+in welcher Epoche? Die Kurven verschieben sich so weit nach rechts, dass sie
+sich kaum noch überlappen.
+
+```{r}
+#| label: fig-verteilung
+#| fig-cap: "Verteilung der Jahresmitteltemperatur in Wien, nach Epochen."
+
+epochen <- wien |>
+  mutate(epoche = case_when(
+    jahr < 1850 ~ "vor 1850",
+    jahr < 1900 ~ "1850–1899",
+    jahr < 1950 ~ "1900–1949",
+    jahr < 2000 ~ "1950–1999",
+    TRUE        ~ "ab 2000") |>
+      factor(levels = c("vor 1850", "1850–1899", "1900–1949",
+                        "1950–1999", "ab 2000")))
+
+ggplot(epochen, aes(temperatur, fill = epoche, color = epoche)) +
+  geom_density(alpha = 0.45, linewidth = 1) +
+  scale_fill_manual(values = c("#08306b", "#4292c6", "#bdbdbd",
+                               "#ef6548", "#7f0000"), name = NULL) +
+  scale_color_manual(values = c("#08306b", "#4292c6", "#9e9e9e",
+                                "#ef6548", "#7f0000"), name = NULL) +
+  scale_x_continuous(labels = \(x) paste0(x, " °C")) +
+  labs(x = "Jahresmitteltemperatur", y = NULL, caption = QUELLE_GEO) +
+  theme_at() +
+  theme(axis.text.y = element_blank(),
+        panel.grid.major.y = element_blank())
+```
+
+```{r}
+#| label: kennzahl-rekord
+
+schnitt_heute <- mean(epochen$temperatur[epochen$jahr >= 2000], na.rm = TRUE)
+frueher <- epochen |> filter(jahr < 1900)
+
+tibble(
+  `Schnitt ab 2000`      = round(schnitt_heute, 2),
+  `Jahre vor 1900`       = nrow(frueher),
+  `davon wärmer als heute üblich` =
+    sum(frueher$temperatur > schnitt_heute, na.rm = TRUE)
+) |> knitr::kable()
+```
+
+## Die Temperatur steigt. Der Regen nicht.
+
+Eine Gegenüberstellung, die man selten sieht — und die wichtig ist, weil
+„mehr Extremwetter" oft pauschal behauptet wird. In der Jahresniederschlags­summe
+zeigt sich kein klarer Trend. Das heißt nicht, dass sich nichts ändert; es
+heißt, dass sich diese bestimmte Kennzahl nicht verändert hat.
+
+```{r}
+#| label: fig-temp-regen
+#| fig-cap: "Abweichung vom Mittel 1961–1990 in Wien. Oben in Grad, unten in Prozent."
+#| fig-height: 7
+
+beides <- wien |>
+  filter(!is.na(niederschlag)) |>
+  mutate(basis_n = mean(niederschlag[between(jahr, referenz[1], referenz[2])],
+                        na.rm = TRUE),
+         Temperatur  = abweichung,
+         Niederschlag = (niederschlag - basis_n) / basis_n * 100) |>
+  select(jahr, Temperatur, Niederschlag) |>
+  pivot_longer(-jahr, names_to = "groesse", values_to = "wert")
+
+ggplot(beides, aes(jahr, wert, color = groesse)) +
+  geom_hline(yintercept = 0, color = INK_MUT, linewidth = 0.4,
+             linetype = "dashed") +
+  geom_line(alpha = 0.3, linewidth = 0.5) +
+  geom_smooth(se = FALSE, method = "loess", span = 0.25, linewidth = 2) +
+  facet_wrap(~groesse, ncol = 1, scales = "free_y") +
+  scale_color_manual(values = c(Temperatur = DIV_HIGH,
+                                Niederschlag = DIV_LOW), guide = "none") +
+  labs(x = NULL, y = NULL, caption = QUELLE_GEO) +
+  theme_at()
+```

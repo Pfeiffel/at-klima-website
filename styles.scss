@@ -1,0 +1,30 @@
+/*-- scss:defaults --*/
+
+$body-bg:        #fcfcfb;
+$body-color:     #1a1a18;
+$link-color:     #1c5cab;
+$font-family-sans-serif: "Inter", -apple-system, "Segoe UI", Roboto,
+                         "Helvetica Neue", Arial, sans-serif;
+$font-size-root: 17px;
+$h1-font-size:   2.3rem;
+$h2-font-size:   1.55rem;
+$h3-font-size:   1.2rem;
+$headings-font-weight: 700;
+$navbar-bg:      #ffffff;
+$toc-color:      #898781;
+
+/*-- scss:rules --*/
+
+h1, h2, h3 { letter-spacing: -0.02em; }
+
+h2 {
+  margin-top: 3rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid #e1e0d9;
+}
+
+p { line-height: 1.65; max-width: 44em; }
+
+.navbar { border-bottom: 1px solid #e1e0d9; }
+
+blockquote, .callout { max-width: 44em; }
